@@ -49,8 +49,16 @@ void mycallback(void *ptr, bigint ntimestep,
     zvals[i] = z;
   }
 
-  mesh["topologies/mesh/type"] = "points";
+  mesh["topologies/mesh/type"] = "unstructured";
   mesh["topologies/mesh/coordset"] = "coords";
+  mesh["topologies/mesh/elements/shape"] = "point";
+
+  mesh["topologies/mesh/elements/connectivity"].set(conduit::DataType::int32(nlocal));
+
+  conduit::int32 *conn = mesh["topologies/mesh/elements/connectivity"].value();
+  for(int i=0; i<nlocal;++i) {
+    conn[i] = i;
+  }
 
   // TODO: var1 -> this var!
   mesh["fields/var1/association"] = "vertex";
@@ -83,6 +91,7 @@ void mycallback(void *ptr, bigint ntimestep,
   conduit::Node &scenes = add_act["scenes"];
   scenes["s1/plots/p1/type"] = "pseudocolor";
   scenes["s1/plots/p1/field"] = "var1";
+  scenes["s1/plots/p1/points/radius"] = 1.f;
   scenes["s1/image_prefix"] = "out_ascent_render_points";
 
   std::cout << actions.to_yaml() << '\n';
