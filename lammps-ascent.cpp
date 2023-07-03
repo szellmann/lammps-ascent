@@ -13,6 +13,8 @@
 #include <fix.h>
 #include <fix_external.h>
 
+#include <ascent.hpp>
+#include <conduit.hpp>
 
 using namespace LAMMPS_NS;
 
@@ -24,7 +26,68 @@ struct Info {
 void mycallback(void *ptr, bigint ntimestep,
         int nlocal, int *id, double **x, double **f)
 {
-  std::cout << nlocal << '\n';
+  Info *info = (Info *)ptr;
+  double **pos = (double **)lammps_extract_atom(info->lmp, "x");
+
+  conduit::Node mesh;
+  mesh["coordsets/coords/type"] = "explicit";
+  mesh["coordsets/coords/values/x"].set(conduit::DataType::float64(nlocal));
+  mesh["coordsets/coords/values/y"].set(conduit::DataType::float64(nlocal));
+  mesh["coordsets/coords/values/z"].set(conduit::DataType::float64(nlocal));
+
+  conduit::float64 *xvals = mesh["coordsets/coords/values/x"].value();
+  conduit::float64 *yvals = mesh["coordsets/coords/values/y"].value();
+  conduit::float64 *zvals = mesh["coordsets/coords/values/z"].value();
+
+  for (int i=0;i<nlocal;++i) {
+    double x = (*pos)[i*3];
+    double y = (*pos)[i*3+1];
+    double z = (*pos)[i*3+2];
+    //std::cout << x << ',' << y << ',' << z << '\n';
+    xvals[i] = x;
+    yvals[i] = y;
+    zvals[i] = z;
+  }
+
+  mesh["topologies/mesh/type"] = "points";
+  mesh["topologies/mesh/coordset"] = "coords";
+
+  // TODO: var1 -> this var!
+  mesh["fields/var1/association"] = "vertex";
+  mesh["fields/var1/topology"] = "mesh";
+  mesh["fields/var1/values"].set(conduit::DataType::float64(nlocal));
+
+  conduit::float64 *vals = mesh["fields/var1/values"].value();
+  for (int i=0;i<nlocal;++i) {
+    vals[i] = rand()/double(RAND_MAX);
+  }
+
+  conduit::Node verify_info;
+  if (!conduit::blueprint::mesh::verify(mesh,verify_info)) {
+    std::cerr << verify_info.to_yaml() << '\n';
+    exit(1);
+  }
+  // else {
+  //   std::cout << "Verification passed!\n";
+  //   std::cout << mesh.to_yaml() << '\n';
+  // }
+
+  ascent::Ascent a;
+  a.open();
+  a.publish(mesh);
+
+  conduit::Node actions;
+  conduit::Node &add_act = actions.append();
+  add_act["action"] = "add_scenes";
+
+  conduit::Node &scenes = add_act["scenes"];
+  scenes["s1/plots/p1/type"] = "pseudocolor";
+  scenes["s1/plots/p1/field"] = "var1";
+  scenes["s1/image_prefix"] = "out_ascent_render_points";
+
+  std::cout << actions.to_yaml() << '\n';
+  a.execute(actions);
+  a.close();
 }
 
 static void usage() {
