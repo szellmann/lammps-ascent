@@ -158,7 +158,9 @@ void mycallback(void *ptr, bigint ntimestep,
   vtkm::cont::ArrayHandle<vtkm::FloatDefault> field;
   density.GetCellField("density").GetData().AsArrayHandle<vtkm::FloatDefault>(field);
 
-  vtkm::io::VTKDataSetWriter writer("test.vtk");
+  std::stringstream str;
+  str << "test-t" << ntimestep << '_' << info->rank << ".vtk";
+  vtkm::io::VTKDataSetWriter writer(str.str());
   writer.WriteDataSet(density);
 
   conduit::Node vtkmBP;
