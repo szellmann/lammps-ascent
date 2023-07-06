@@ -167,10 +167,12 @@ void mycallback(void *ptr, bigint ntimestep,
   vtkm::cont::ArrayHandle<vtkm::FloatDefault> field;
   density.GetCellField("density").GetData().AsArrayHandle<vtkm::FloatDefault>(field);
 
+#if 0
   std::stringstream str;
   str << "test-t" << ntimestep << '_' << info->rank << ".vtk";
   vtkm::io::VTKDataSetWriter writer(str.str());
   writer.WriteDataSet(density);
+#endif
 
   conduit::Node vtkmBP;
   ascent::VTKHDataAdapter::VTKmToBlueprintDataSet(&density, vtkmBP, "mesh", /* attempt to zero-copy = */true);
