@@ -14,7 +14,16 @@
 #include <fix_external.h>
 
 #include <ascent.hpp>
+#include <ascent_vtkh_data_adapter.hpp>
 #include <conduit.hpp>
+
+#include <vtkm/cont/ArrayCopy.h>
+#include <vtkm/cont/ArrayCopyDevice.h>
+#include <vtkm/cont/ArrayHandleRandomUniformReal.h>
+#include <vtkm/cont/DataSetBuilderExplicit.h>
+#include <vtkm/filter/density_estimate/ParticleDensityCloudInCell.h>
+#include <vtkm/filter/density_estimate/ParticleDensityNearestGridPoint.h>
+#include <vtkm/io/VTKDataSetWriter.h>
 
 using namespace LAMMPS_NS;
 
@@ -29,6 +38,15 @@ void mycallback(void *ptr, bigint ntimestep,
   Info *info = (Info *)ptr;
   double **pos = (double **)lammps_extract_atom(info->lmp, "x");
 
+  
+  double xsublo = info->lmp->domain->sublo[0];
+  double xsubhi = info->lmp->domain->subhi[0];
+  double ysublo = info->lmp->domain->sublo[1];
+  double ysubhi = info->lmp->domain->subhi[1];
+  double zsublo = info->lmp->domain->sublo[2];
+  double zsubhi = info->lmp->domain->subhi[2];
+
+#if 0
   conduit::Node mesh;
   mesh["coordsets/coords/type"] = "explicit";
   mesh["coordsets/coords/values/x"].set(conduit::DataType::float64(nlocal));
@@ -85,14 +103,101 @@ void mycallback(void *ptr, bigint ntimestep,
   a.publish(mesh);
 
   conduit::Node actions;
+
   conduit::Node &add_act = actions.append();
   add_act["action"] = "add_scenes";
 
   conduit::Node &scenes = add_act["scenes"];
   scenes["s1/plots/p1/type"] = "pseudocolor";
   scenes["s1/plots/p1/field"] = "var1";
-  scenes["s1/plots/p1/points/radius"] = 1.f;
   scenes["s1/image_prefix"] = "out_ascent_render_points";
+
+  // render as points
+  scenes["s1/plots/p1/points/radius"] = .3f;
+#endif
+
+#if 1
+  std::vector<vtkm::Vec3f> hPos(nlocal);
+  for (int i=0;i<nlocal;++i) {
+    double x = (*pos)[i*3];
+    double y = (*pos)[i*3+1];
+    double z = (*pos)[i*3+2];
+    hPos[i] = {x,y,z};
+  }
+
+  vtkm::cont::ArrayHandle<vtkm::Vec3f> positions
+    = vtkm::cont::make_ArrayHandle(hPos.data(), nlocal, vtkm::CopyFlag::Off);
+
+  vtkm::cont::ArrayHandle<vtkm::Id> connectivity;
+  vtkm::cont::ArrayCopy(vtkm::cont::make_ArrayHandleIndex(nlocal), connectivity);
+
+  auto dataSet = vtkm::cont::DataSetBuilderExplicit::Create(
+    positions, vtkm::CellShapeTagVertex{}, 1, connectivity);
+
+  std::vector<vtkm::FloatDefault> hVar1(nlocal);
+  for (int i=0;i<nlocal;++i) {
+    hVar1[i] = rand()/double(RAND_MAX);
+  }
+  vtkm::cont::ArrayHandle<vtkm::FloatDefault> var1
+    = vtkm::cont::make_ArrayHandle(hVar1.data(), nlocal, vtkm::CopyFlag::Off);
+  dataSet.AddCellField("var1", var1);
+
+  vtkm::Id3 cellDims = { 64, 64, 64 };
+  vtkm::Bounds bounds = { { xsublo, xsubhi }, { ysublo, ysubhi }, { zsublo, zsubhi } };
+  vtkm::filter::density_estimate::ParticleDensityNearestGridPoint filter;
+  filter.SetDimension(cellDims);
+  filter.SetBounds(bounds);
+  filter.SetActiveField("var1");
+
+  auto density = filter.Execute(dataSet);
+
+  vtkm::cont::ArrayHandle<vtkm::FloatDefault> field;
+  density.GetCellField("density").GetData().AsArrayHandle<vtkm::FloatDefault>(field);
+
+  vtkm::io::VTKDataSetWriter writer("test.vtk");
+  writer.WriteDataSet(density);
+
+  conduit::Node vtkmBP;
+  ascent::VTKHDataAdapter::VTKmToBlueprintDataSet(&density, vtkmBP, "mesh", /* attempt to zero-copy = */true);
+  vtkmBP.print();
+
+  conduit::Node verify_info;
+  if (!conduit::blueprint::mesh::verify(vtkmBP,verify_info)) {
+    std::cerr << verify_info.to_yaml() << '\n';
+    exit(1);
+  }
+  // else {
+  //   std::cout << "Verification passed!\n";
+  //   std::cout << mesh.to_yaml() << '\n';
+  // }
+
+  ascent::Ascent a;
+  a.open();
+  a.publish(vtkmBP);
+
+  conduit::Node actions;
+
+  conduit::Node &add_pl = actions.append();
+  add_pl["action"] = "add_pipelines";
+
+  conduit::Node &pipelines = add_pl["pipelines"];
+
+  pipelines["p1/f1/type"] = "contour";
+  pipelines["p1/f1/params/field"] = "density";
+  //pipelines["p1/f1/params/levels"] = "15";
+  pipelines["p1/f1/params/iso_values"] = 0.5;
+
+  conduit::Node &add_act = actions.append();
+  add_act["action"] = "add_scenes";
+
+  conduit::Node &scenes = add_act["scenes"];
+  scenes["s1/plots/p1/type"] = "pseudocolor";
+  scenes["s1/plots/p1/field"] = "density";
+  scenes["s1/image_prefix"] = "out_ascent_render_contour";
+
+  // render iso contours
+  scenes["s1/plots/p1/pipeline"] = "p1";
+#endif
 
   std::cout << actions.to_yaml() << '\n';
   a.execute(actions);
