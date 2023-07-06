@@ -47,6 +47,14 @@ void mycallback(void *ptr, bigint ntimestep,
   double zsublo = info->lmp->domain->sublo[2];
   double zsubhi = info->lmp->domain->subhi[2];
 
+  std::stringstream boundsStr;
+  boundsStr << "time step: " << ntimestep
+            << ", rank: " << info->rank
+            << ", [(" << xsublo << ',' << ysublo << ',' << zsublo
+            << "):(" << xsubhi << ',' << ysubhi << ',' << zsubhi
+            << ")]\n";
+  std::cout << boundsStr.str();
+
 #if 1
   conduit::Node mesh;
   mesh["coordsets/coords/type"] = "explicit";
