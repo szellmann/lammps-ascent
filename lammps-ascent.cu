@@ -28,6 +28,7 @@
 using namespace LAMMPS_NS;
 
 struct Info {
+  MPI_Comm comm;
   int rank;
   LAMMPS *lmp;
 };
@@ -98,8 +99,11 @@ void mycallback(void *ptr, bigint ntimestep,
   //   std::cout << mesh.to_yaml() << '\n';
   // }
 
+  conduit::Node ascent_opts;
+  ascent_opts["mpi_comm"] = MPI_Comm_c2f(info->comm);
+
   ascent::Ascent a;
-  a.open();
+  a.open(ascent_opts);
   a.publish(mesh);
 
   conduit::Node actions;
@@ -171,8 +175,11 @@ void mycallback(void *ptr, bigint ntimestep,
   //   std::cout << mesh.to_yaml() << '\n';
   // }
 
+  conduit::Node ascent_opts;
+  ascent_opts["mpi_comm"] = MPI_Comm_c2f(info->comm);
+
   ascent::Ascent a;
-  a.open();
+  a.open(ascent_opts);
   a.publish(vtkmBP);
 
   conduit::Node actions;
@@ -284,6 +291,7 @@ int main(int argc, char *argv[])
 
   // Setup the fix external callback
   Info info;
+  info.comm = lammps_comm;
   info.rank = comm_rank;
   info.lmp = lammps;
 

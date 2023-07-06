@@ -17,7 +17,7 @@ target_sources(${PROJECT_NAME}
 target_include_directories(${PROJECT_NAME} PRIVATE ${LAMMPS_INCLUDE_DIRS})
 target_include_directories(${PROJECT_NAME} PRIVATE ${MPI_C_INCLUDE_PATH})
 target_link_libraries(${PROJECT_NAME} PUBLIC ${LAMMPS_LIBRARIES})
-target_link_libraries(${PROJECT_NAME} PUBLIC ascent::ascent)
+target_link_libraries(${PROJECT_NAME} PUBLIC ascent::ascent_mpi)
 target_link_libraries(${PROJECT_NAME} PUBLIC CUDA::toolkit)
 target_link_libraries(${PROJECT_NAME} PUBLIC 
   ${MPI_C_LIBRARIES}
