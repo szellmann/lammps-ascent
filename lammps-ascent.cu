@@ -47,7 +47,7 @@ void mycallback(void *ptr, bigint ntimestep,
   double zsublo = info->lmp->domain->sublo[2];
   double zsubhi = info->lmp->domain->subhi[2];
 
-#if 0
+#if 1
   conduit::Node mesh;
   mesh["coordsets/coords/type"] = "explicit";
   mesh["coordsets/coords/values/x"].set(conduit::DataType::float64(nlocal));
@@ -99,6 +99,15 @@ void mycallback(void *ptr, bigint ntimestep,
   //   std::cout << mesh.to_yaml() << '\n';
   // }
 
+#if 0
+  auto mesh_vtkm = ascent::VTKHDataAdapter::BlueprintToVTKmDataSet(mesh, /* attempt to zero-copy = */true, "mesh");
+  mesh_vtkm->PrintSummary(std::cout);
+  std::stringstream str;
+  str << "particles-t" << ntimestep << '_' << info->rank << ".vtk";
+  vtkm::io::VTKDataSetWriter writer(str.str());
+  writer.WriteDataSet(*mesh_vtkm);
+#endif
+
   conduit::Node ascent_opts;
   ascent_opts["mpi_comm"] = MPI_Comm_c2f(info->comm);
 
@@ -120,7 +129,7 @@ void mycallback(void *ptr, bigint ntimestep,
   scenes["s1/plots/p1/points/radius"] = .3f;
 #endif
 
-#if 1
+#if 0
   std::vector<vtkm::Vec3f> hPos(nlocal);
   for (int i=0;i<nlocal;++i) {
     double x = (*pos)[i*3];
