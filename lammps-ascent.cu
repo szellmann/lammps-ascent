@@ -170,6 +170,25 @@ void mycallback(void *ptr, bigint ntimestep,
 
   vtkm::Bounds bounds = { { xsublo, xsubhi }, { ysublo, ysubhi }, { zsublo, zsubhi } };
 
+  auto doubleNEQ = [](double a, double b) {
+    return fabs(a-b)>1e-4;
+  };
+
+  // Extend bounds a little (ghosts)
+  double little[3] = {
+    (boxhi[0]-boxlo[0])/10.0,
+    (boxhi[1]-boxlo[1])/10.0,
+    (boxhi[2]-boxlo[2])/10.0,
+  };
+
+  for (int i=0;i<3;++i) {
+    double *minCorner[3] = { &bounds.X.Min, &bounds.Y.Min, &bounds.Z.Min };
+    double *maxCorner[3] = { &bounds.X.Max, &bounds.Y.Max, &bounds.Z.Max };
+
+    if (doubleNEQ(bounds.MinCorner()[i], boxlo[i])) *minCorner[i] -= little[i];
+    if (doubleNEQ(bounds.MaxCorner()[i], boxhi[i])) *maxCorner[i] += little[i];
+  }
+
   double xscale = (boxhi[0]-boxlo[0])/bounds.X.Length();
   double yscale = (boxhi[1]-boxlo[1])/bounds.Y.Length();
   double zscale = (boxhi[2]-boxlo[2])/bounds.Z.Length();
