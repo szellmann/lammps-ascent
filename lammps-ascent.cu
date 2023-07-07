@@ -39,7 +39,6 @@ void mycallback(void *ptr, bigint ntimestep,
   Info *info = (Info *)ptr;
   double **pos = (double **)lammps_extract_atom(info->lmp, "x");
 
-  
   double xsublo = info->lmp->domain->sublo[0];
   double xsubhi = info->lmp->domain->subhi[0];
   double ysublo = info->lmp->domain->sublo[1];
@@ -55,7 +54,7 @@ void mycallback(void *ptr, bigint ntimestep,
             << ")]\n";
   std::cout << boundsStr.str();
 
-#if 1
+#if 0
   conduit::Node mesh;
   mesh["coordsets/coords/type"] = "explicit";
   mesh["coordsets/coords/values/x"].set(conduit::DataType::float64(nlocal));
@@ -137,7 +136,7 @@ void mycallback(void *ptr, bigint ntimestep,
   scenes["s1/plots/p1/points/radius"] = .3f;
 #endif
 
-#if 0
+#if 1
   std::vector<vtkm::Vec3f> hPos(nlocal);
   for (int i=0;i<nlocal;++i) {
     double x = (*pos)[i*3];
@@ -163,8 +162,25 @@ void mycallback(void *ptr, bigint ntimestep,
     = vtkm::cont::make_ArrayHandle(hVar1.data(), nlocal, vtkm::CopyFlag::Off);
   dataSet.AddCellField("var1", var1);
 
-  vtkm::Id3 cellDims = { 64, 64, 64 };
+  double boxlo[3], boxhi[3];
+  double xy, yz, xz;
+  int pflags[3];
+  int boxflag;
+  lammps_extract_box(info->lmp, boxlo, boxhi, &xy, &yz, &xz, pflags, &boxflag);
+
   vtkm::Bounds bounds = { { xsublo, xsubhi }, { ysublo, ysubhi }, { zsublo, zsubhi } };
+
+  double xscale = (boxhi[0]-boxlo[0])/bounds.X.Length();
+  double yscale = (boxhi[1]-boxlo[1])/bounds.Y.Length();
+  double zscale = (boxhi[2]-boxlo[2])/bounds.Z.Length();
+
+  // TODO: this works for a cuboid global domain, but haven't
+  // tested for other aspect ratios yet..
+  vtkm::Id3 cellDims = { 64, 64, 64 };
+  cellDims[0] = int(cellDims[0]/xscale);
+  cellDims[1] = int(cellDims[1]/yscale);
+  cellDims[2] = int(cellDims[2]/zscale);
+
   vtkm::filter::density_estimate::ParticleDensityNearestGridPoint filter;
   filter.SetDimension(cellDims);
   filter.SetBounds(bounds);
@@ -213,6 +229,7 @@ void mycallback(void *ptr, bigint ntimestep,
   pipelines["p1/f1/type"] = "contour";
   pipelines["p1/f1/params/field"] = "density";
   //pipelines["p1/f1/params/levels"] = "15";
+  //pipelines["p1/f1/params/iso_values"] = info->rank/3.0;//0.5;
   pipelines["p1/f1/params/iso_values"] = 0.5;
 
   conduit::Node &add_act = actions.append();
